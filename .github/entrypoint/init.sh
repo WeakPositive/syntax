@@ -61,20 +61,6 @@ else
   echo 'LATEST_COMMIT='$LATEST_COMMIT >> ${GITHUB_ENV}
 fi
 
-if [[ -z ${PASS} ]] || [[ "${PASS}" == "true" ]]; then
-
-  echo 'TARGET_REPO='${TARGET_REPO} >> ${GITHUB_ENV}
-  echo 'REMOTE_REPO='${REMOTE_REPO} >> ${GITHUB_ENV}
-
-  if [[ -f /home/runner/_site/_config.yml ]]; then
-    cat /home/runner/_site/_config.yml
-    FOLDER=$(yq '.span' /home/runner/_site/_config.yml)
-    export FOLDER=$(eval echo $FOLDER)
-  elif [[ -f /home/runner/_site/.env ]]; then
-    set -a && . /home/runner/_site/.env && set +a
-  fi
-fi
-
 if [[ "${JOBS_ID}" == "1" ]]; then
 
   BASE_FOLDER="/home/runner/work/_actions/eq19/eq19/v2/.github"
@@ -163,9 +149,20 @@ elif [[ "${JOBS_ID}" == "2" ]]; then
   
 elif [[ "${JOBS_ID}" == "3" ]]; then
 
+  find -not -path "./.git/*" -not -name ".git" -delete
+  shopt -s dotglob && cp -R /mnt/disks/deeplearning/tmp/_site/* .
+
+  # Get the config value and save to file.json
+  curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
+    "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/variables/JEKYLL_CONFIG" \
+    | jq -r '.value' > _config.yml
+  curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
+    "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/variables/ORGS_JSON" \
+    | jq -r '.value' > _data/orgs.json
+
   gist.sh ${BASE} $(pwd)
   if [[ "${WIKI}" != "${BASE}" ]]; then
-    find . -type d -name "${FOLDER}" -prune -exec sh -c 'gist.sh ${WIKI} "$1"' sh {} \;
+    find . -type d -name "$(yq '.span' _config.yml)" -prune -exec sh -c 'gist.sh ${WIKI} "$1"' sh {} \;
   fi
 
 else
@@ -178,11 +175,6 @@ else
 
   rm -rf ${RUNNER_TEMP//\\//}/gh-source/.git
   shopt -s dotglob && mv -f ${RUNNER_TEMP//\\//}/gh-source/* .
-
-  # Get the variable value and save to file.json
-  curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
-    "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/variables/JEKYLL_CONFIG" \
-    | jq -r '.value' > _config.yml
 
   echo -e "\n$hr\nCONFIG\n$hr" && cat _config.yml
   echo -e "\n$hr\nENVIRONTMENT\n$hr" && printenv | sort
